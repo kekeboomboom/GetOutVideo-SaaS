@@ -15,7 +15,7 @@ export const Hero = () => {
         banner={(
           <a
             className={badgeVariants()}
-            href="https://twitter.com/ixartz"
+            href="https://x.com/keboom945091"
             target="_blank"
             rel="noopener noreferrer"
           >
