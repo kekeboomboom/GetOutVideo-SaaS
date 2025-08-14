@@ -1,4 +1,4 @@
-import { getTranslations, unstable_setRequestLocale } from 'next-intl/server';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { CTA } from '@/templates/CTA';
 import { DemoBanner } from '@/templates/DemoBanner';
@@ -24,7 +24,7 @@ export async function generateMetadata(props: { params: Promise<{ locale: string
 
 const IndexPage = async (props: { params: Promise<{ locale: string }> }) => {
   const params = await props.params;
-  unstable_setRequestLocale(params.locale);
+  setRequestLocale(params.locale);
 
   return (
     <>

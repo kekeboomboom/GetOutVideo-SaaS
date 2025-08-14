@@ -16,11 +16,12 @@ import { AllLocales } from '@/utils/AppConfig';
 // Using internationalization in Server Components
 export default getRequestConfig(async ({ locale }) => {
   // Validate that the incoming `locale` parameter is valid
-  if (!AllLocales.includes(locale)) {
+  if (!locale || !AllLocales.includes(locale)) {
     notFound();
   }
 
   return {
+    locale,
     messages: (await import(`../locales/${locale}.json`)).default,
   };
 });
