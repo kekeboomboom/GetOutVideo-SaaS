@@ -1,6 +1,6 @@
 import { BILLING_INTERVAL, type PricingPlan } from '@/types/Subscription';
 
-const localePrefix = 'as-needed' as const;
+const localePrefix = 'always' as const;
 
 // FIXME: Update this configuration file based on your project information
 export const AppConfig = {

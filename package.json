@@ -3,7 +3,7 @@
   "version": "1.7.6",
   "scripts": {
     "dev:spotlight": "spotlight-sidecar",
-    "dev:next": "next dev",
+    "dev:next": "wait-on tcp:8969 && next dev",
     "dev": "run-p dev:*",
     "build": "next build",
     "start": "next start",
@@ -130,7 +130,8 @@
     "typescript": "^5.6.3",
     "vite-tsconfig-paths": "^5.0.1",
     "vitest": "^2.1.9",
-    "vitest-fail-on-console": "^0.7.1"
+    "vitest-fail-on-console": "^0.7.1",
+    "wait-on": "^8.0.4"
   },
   "config": {
     "commitizen": {

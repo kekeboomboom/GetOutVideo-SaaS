@@ -32,5 +32,9 @@ Sentry.init({
 });
 
 if (process.env.NODE_ENV === 'development') {
-  Spotlight.init();
+  try {
+    Spotlight.init();
+  } catch (error) {
+    console.warn('Spotlight initialization failed:', error);
+  }
 }

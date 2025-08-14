@@ -30,6 +30,12 @@ export default function middleware(
     return NextResponse.next();
   }
 
+  // Handle root path redirect to default locale
+  if (request.nextUrl.pathname === '/') {
+    const redirectUrl = new URL(`/${AppConfig.defaultLocale}`, request.url);
+    return NextResponse.redirect(redirectUrl);
+  }
+
   if (
     request.nextUrl.pathname.includes('/sign-in')
     || request.nextUrl.pathname.includes('/sign-up')
