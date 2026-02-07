@@ -15,6 +15,8 @@ const bundleAnalyzer = withBundleAnalyzer({
   enabled: process.env.ANALYZE === 'true',
 });
 
+const getVideoApiBase = () => process.env.NEXT_PUBLIC_VIDEO_API_BASE?.replace(/\/$/, '');
+
 /** @type {import('next').NextConfig} */
 export default withSentryConfig(
   bundleAnalyzer(
@@ -25,6 +27,19 @@ export default withSentryConfig(
       poweredByHeader: false,
       reactStrictMode: true,
       serverExternalPackages: ['@electric-sql/pglite'],
+      async rewrites() {
+        const apiBase = getVideoApiBase();
+        if (!apiBase) {
+          return [];
+        }
+
+        return [
+          {
+            source: '/api/v1/:path*',
+            destination: `${apiBase}/api/v1/:path*`,
+          },
+        ];
+      },
     }),
   ),
   {

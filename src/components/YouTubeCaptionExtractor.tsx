@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,21 +12,169 @@ import {
 } from '@/components/ui/tooltip';
 import { FeatureCard } from '@/features/landing/FeatureCard';
 
+type MarkdownBlock =
+  | { type: 'heading'; level: 1 | 2 | 3 | 4 | 5 | 6; text: string }
+  | { type: 'paragraph'; text: string }
+  | { type: 'list'; items: string[] }
+  | { type: 'code'; text: string };
+
+const parseMarkdown = (source: string): MarkdownBlock[] => {
+  const lines = source.split(/\r?\n/);
+  const blocks: MarkdownBlock[] = [];
+  let paragraphLines: string[] = [];
+  let listItems: string[] = [];
+  let codeLines: string[] = [];
+  let isInCodeBlock = false;
+
+  const flushParagraph = () => {
+    if (paragraphLines.length > 0) {
+      blocks.push({ type: 'paragraph', text: paragraphLines.join(' ') });
+      paragraphLines = [];
+    }
+  };
+
+  const flushList = () => {
+    if (listItems.length > 0) {
+      blocks.push({ type: 'list', items: listItems });
+      listItems = [];
+    }
+  };
+
+  const flushCode = () => {
+    if (codeLines.length > 0) {
+      blocks.push({ type: 'code', text: codeLines.join('\n') });
+      codeLines = [];
+    }
+  };
+
+  lines.forEach(line => {
+    if (line.trim().startsWith('```')) {
+      if (isInCodeBlock) {
+        flushCode();
+        isInCodeBlock = false;
+      } else {
+        flushParagraph();
+        flushList();
+        isInCodeBlock = true;
+      }
+      return;
+    }
+
+    if (isInCodeBlock) {
+      codeLines.push(line);
+      return;
+    }
+
+    const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
+    if (headingMatch) {
+      flushParagraph();
+      flushList();
+      blocks.push({
+        type: 'heading',
+        level: headingMatch[1].length as MarkdownBlock['level'],
+        text: headingMatch[2].trim(),
+      });
+      return;
+    }
+
+    const listMatch = line.match(/^[-*]\s+(.*)$/);
+    if (listMatch) {
+      flushParagraph();
+      listItems.push(listMatch[1].trim());
+      return;
+    }
+
+    if (line.trim() === '') {
+      flushParagraph();
+      flushList();
+      return;
+    }
+
+    if (listItems.length > 0) {
+      flushList();
+    }
+
+    paragraphLines.push(line.trim());
+  });
+
+  flushParagraph();
+  flushList();
+  flushCode();
+
+  return blocks;
+};
+
+const renderLinks = (text: string, keyPrefix: string) => {
+  const urlRegex = /(https?:\/\/[^\s)]+)/g;
+  const parts = text.split(urlRegex);
+
+  return parts.map((part, index) => {
+    if (part.startsWith('http://') || part.startsWith('https://')) {
+      return (
+        <a
+          key={`${keyPrefix}-url-${index}`}
+          href={part}
+          target="_blank"
+          rel="noreferrer"
+          className="break-all text-blue-600 underline decoration-blue-300 underline-offset-2"
+        >
+          {part}
+        </a>
+      );
+    }
+    return (
+      <span key={`${keyPrefix}-text-${index}`}>
+        {part}
+      </span>
+    );
+  });
+};
+
+const renderInline = (text: string, keyPrefix: string) => {
+  const segments = text.split(/(\*\*[^*]+\*\*)/g);
+
+  return segments.map((segment, segmentIndex) => {
+    if (segment.startsWith('**') && segment.endsWith('**')) {
+      const boldText = segment.slice(2, -2);
+      return (
+        <strong key={`${keyPrefix}-bold-${segmentIndex}`} className="font-semibold text-gray-900">
+          {renderLinks(boldText, `${keyPrefix}-bold-${segmentIndex}`)}
+        </strong>
+      );
+    }
+
+    return (
+      <span key={`${keyPrefix}-seg-${segmentIndex}`}>
+        {renderLinks(segment, `${keyPrefix}-seg-${segmentIndex}`)}
+      </span>
+    );
+  });
+};
+
 export const YouTubeCaptionExtractor = () => {
   const [url, setUrl] = useState('');
   const [captions, setCaptions] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [copySuccess, setCopySuccess] = useState(false);
+  const defaultStyles = ['Balanced'];
+  const defaultOutputLanguage = 'Chinese';
   const [stats, setStats] = useState<{
     wordCount: number;
     videoId: string;
     totalCaptions: number;
   } | null>(null);
+  const formattedCaptions = useMemo(() => parseMarkdown(captions), [captions]);
+  const apiBaseUrl = process.env.NEXT_PUBLIC_VIDEO_API_BASE?.replace(/\/$/, '');
 
   const handleExtractCaptions = async () => {
     if (!url.trim()) {
       setError('Please enter a YouTube URL');
+      return;
+    }
+
+    if (!apiBaseUrl) {
+      setError('Video API base URL is not configured. Set NEXT_PUBLIC_VIDEO_API_BASE.');
       return;
     }
 
@@ -37,12 +185,16 @@ export const YouTubeCaptionExtractor = () => {
     setCopySuccess(false);
 
     try {
-      const response = await fetch('/api/youtube-captions', {
+      const response = await fetch('/api/v1/video/process/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({
+          video_url: url,
+          styles: defaultStyles,
+          output_language: defaultOutputLanguage,
+        }),
       });
 
       if (!response.ok) {
@@ -52,16 +204,44 @@ export const YouTubeCaptionExtractor = () => {
 
       const data = await response.json();
 
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to extract captions');
+      if (data?.status && data.status !== 'success') {
+        throw new Error(data?.error || data?.message || 'Failed to extract captions');
       }
 
-      setCaptions(data.captions);
-      setStats({
-        wordCount: data.wordCount,
-        videoId: data.videoId,
-        totalCaptions: data.totalCaptions,
-      });
+      if (data?.success === false) {
+        throw new Error(data?.error || 'Failed to extract captions');
+      }
+
+      const responseData = data?.data ?? data;
+      const results = responseData?.results ?? {};
+      const styleKey = defaultStyles[0]?.toLowerCase();
+      const resultsCaption = (styleKey ? results?.[styleKey] : undefined) ?? results?.[defaultStyles[0]];
+
+      const captionCandidate = [
+        resultsCaption,
+        responseData?.captions,
+        responseData?.caption,
+        responseData?.output,
+        responseData?.result,
+        responseData?.text,
+      ].find(value => typeof value === 'string' && value.trim() !== '');
+      const resolvedCaptions = typeof captionCandidate === 'string'
+        ? captionCandidate
+        : JSON.stringify(data, null, 2);
+
+      setCaptions(resolvedCaptions);
+
+      const wordCount = responseData?.wordCount ?? responseData?.word_count;
+      const videoId = responseData?.videoId ?? responseData?.video_id;
+      const totalCaptions = responseData?.totalCaptions ?? responseData?.total_captions;
+
+      if (wordCount != null || videoId || totalCaptions != null) {
+        setStats({
+          wordCount: wordCount ?? resolvedCaptions.split(/\s+/).length,
+          videoId: videoId ?? 'Unknown',
+          totalCaptions: totalCaptions ?? 0,
+        });
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to extract captions. Please try again.';
       setError(errorMessage);
@@ -146,10 +326,59 @@ export const YouTubeCaptionExtractor = () => {
           {captions && (
             <div className="mt-6">
               <h3 className="mb-3 text-lg font-semibold">Extracted Captions</h3>
-              <div className="rounded-md border bg-gray-50 p-4">
-                <pre className="max-h-96 overflow-auto whitespace-pre-wrap font-mono text-sm">
-                  {captions}
-                </pre>
+              <div className="rounded-md border bg-white p-4">
+                <div className="max-h-96 overflow-auto">
+                  <div className="space-y-4 text-sm text-gray-700">
+                    {formattedCaptions.map((block, index) => {
+                      if (block.type === 'heading') {
+                        const headingClasses = {
+                          1: 'text-2xl font-semibold text-gray-900',
+                          2: 'text-xl font-semibold text-gray-900',
+                          3: 'text-lg font-semibold text-gray-900',
+                          4: 'text-base font-semibold text-gray-900',
+                          5: 'text-sm font-semibold text-gray-900',
+                          6: 'text-sm font-medium text-gray-900',
+                        } satisfies Record<number, string>;
+                        const Tag = `h${block.level}` as const;
+
+                        return (
+                          <Tag key={`heading-${index}`} className={headingClasses[block.level]}>
+                            {renderInline(block.text, `heading-${index}`)}
+                          </Tag>
+                        );
+                      }
+
+                      if (block.type === 'list') {
+                        return (
+                          <ul key={`list-${index}`} className="list-disc space-y-1 pl-5">
+                            {block.items.map((item, itemIndex) => (
+                              <li key={`list-${index}-item-${itemIndex}`}>
+                                {renderInline(item, `list-${index}-item-${itemIndex}`)}
+                              </li>
+                            ))}
+                          </ul>
+                        );
+                      }
+
+                      if (block.type === 'code') {
+                        return (
+                          <pre
+                            key={`code-${index}`}
+                            className="overflow-auto rounded-md bg-gray-50 p-3 font-mono text-xs text-gray-800"
+                          >
+                            {block.text}
+                          </pre>
+                        );
+                      }
+
+                      return (
+                        <p key={`paragraph-${index}`} className="leading-relaxed text-gray-700">
+                          {renderInline(block.text, `paragraph-${index}`)}
+                        </p>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
               <div className="mt-3 flex gap-2">
                 <TooltipProvider>
