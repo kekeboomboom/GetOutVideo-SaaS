@@ -31,7 +31,9 @@ const IndexPage = async (props: { params: Promise<{ locale: string }> }) => {
       <DemoBanner />
       <Navbar />
       <Hero />
-      <Features />
+      <div id="features">
+        <Features />
+      </div>
       <Pricing />
       <FAQ />
       <CTA />

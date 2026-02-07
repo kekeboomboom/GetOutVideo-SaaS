@@ -36,14 +36,14 @@ export const Hero = () => {
           <>
             <a
               className={buttonVariants({ size: 'lg' })}
-              href="https://github.com/ixartz/SaaS-Boilerplate"
+              href="#features"
             >
               {t('primary_button')}
             </a>
 
             <a
               className={buttonVariants({ variant: 'outline', size: 'lg' })}
-              href="https://github.com/ixartz/SaaS-Boilerplate"
+              href="https://github.com/kekeboomboom/GetOutVideo-SaaS"
             >
               <GitHubLogoIcon className="mr-2 size-5" />
               {t('secondary_button')}
